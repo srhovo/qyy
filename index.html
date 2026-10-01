@@ -15,15 +15,20 @@
   --red:#c8322b;
   --red-soft:#e05a50;
   --ease:cubic-bezier(.4,0,.2,1);
+  /* 圆润一点的字体栈：优先系统圆体/手写感，逐级回退 */
+  --round:"PingFang SC","Hiragino Sans GB","Yuanti SC","Yuanti TC","STYuanti",
+          "Hiragino Maru Gothic ProN","Hiragino Kaku Gothic ProN",
+          "Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+  --round-serif:"Yuanti SC","Hiragino Maru Gothic ProN",Georgia,serif;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{width:100%;height:100%;overflow:hidden;background:#000}
 body{
-  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  font-family:var(--round);
   color:var(--mist);
   -webkit-font-smoothing:antialiased;
-  font-weight:300;
-  letter-spacing:.02em;
+  font-weight:400;
+  letter-spacing:.04em;
 }
 #stage{position:fixed;inset:0;overflow:hidden}
 
@@ -67,20 +72,20 @@ body{
 #s0 .poem{
   position:absolute;left:50%;top:50%;
   transform:translate(-50%,-50%);
-  font-size:clamp(14px,3.4vw,18px);
-  letter-spacing:.55em;text-indent:.55em;
+  font-size:clamp(15px,3.7vw,20px);
+  letter-spacing:.46em;text-indent:.46em;
   color:rgba(240,241,244,.95);
   white-space:nowrap;
   opacity:0;
   filter:blur(8px);
-  font-weight:200;
+  font-weight:400;
   transition:opacity 2.4s var(--ease),filter 2.4s var(--ease),letter-spacing 2.4s var(--ease);
 }
 #s0.poem-on .poem{
   opacity:1;filter:blur(0);
 }
 #s0.poem-breathe .poem{
-  letter-spacing:.55em;
+  letter-spacing:.46em;
 }
 #s0 .poem .rain-dot{
   display:inline-block;
@@ -105,20 +110,24 @@ body{
 /* ============ 文本排版 ============ */
 .cap{
   position:relative;z-index:5;text-align:center;
-  padding:0 2rem;max-width:min(760px,88vw);
+  padding:0 1.4rem;max-width:min(760px,92vw);
 }
 .cap .zh{
-  font-size:clamp(20px,4.6vw,34px);
-  line-height:2.1;font-weight:200;letter-spacing:.14em;
-  color:var(--mist);text-indent:.14em;
+  font-size:clamp(19px,4.4vw,32px);
+  line-height:2.0;font-weight:400;letter-spacing:.1em;
+  color:var(--mist);text-indent:.1em;
 }
-.cap .zh.sm{font-size:clamp(15px,3.2vw,22px);line-height:2.3;color:var(--ash)}
-.cap .zh.xs{font-size:clamp(13px,2.7vw,17px);line-height:2.4;color:var(--ash2)}
+.cap .zh.sm{
+  font-size:clamp(14.5px,3.1vw,21px);
+  line-height:2.25;color:#b9bbc2;
+  font-weight:400;
+}
+.cap .zh.xs{font-size:clamp(12.5px,2.6vw,16px);line-height:2.35;color:var(--ash2);font-weight:400}
 .cap .en{
-  font-size:clamp(10px,2vw,12px);letter-spacing:.42em;color:var(--ash2);
-  margin-top:1.6rem;text-transform:uppercase;text-indent:.42em;
+  font-size:clamp(10px,2vw,12px);letter-spacing:.34em;color:var(--ash2);
+  margin-top:1.5rem;text-transform:uppercase;text-indent:.34em;
 }
-.cap .line{display:block;overflow:hidden}
+.cap .line{display:block;overflow:hidden;padding:.06em 0}
 .cap .line i{display:block;font-style:normal;transform:translateY(105%);opacity:0;
   transition:transform 1.5s var(--ease),opacity 1.5s var(--ease)}
 .scene.on .cap .line i{transform:translateY(0);opacity:1}
@@ -165,12 +174,12 @@ body{
 
 .call-txt{margin-top:2.2rem;text-align:center}
 .call-txt .who{
-  font-size:clamp(19px,4.6vw,26px);font-weight:200;letter-spacing:.22em;
-  color:var(--mist);text-indent:.22em;
+  font-size:clamp(21px,5vw,29px);font-weight:400;letter-spacing:.16em;
+  color:var(--mist);text-indent:.16em;
 }
 .call-txt .status{
-  margin-top:.85rem;font-size:clamp(12px,2.6vw,14px);letter-spacing:.32em;
-  color:var(--ash);text-indent:.32em;
+  margin-top:.9rem;font-size:clamp(12px,2.6vw,14.5px);letter-spacing:.26em;
+  color:var(--ash);text-indent:.26em;
   min-height:1.6em;
   transition:color .4s var(--ease);
 }
@@ -179,10 +188,10 @@ body{
 
 /* 计时器 */
 .call-timer{
-  margin-top:.55rem;
-  font-size:clamp(11px,2.4vw,13px);
-  letter-spacing:.34em;text-indent:.34em;
-  color:rgba(139,141,146,.6);
+  margin-top:.6rem;
+  font-size:clamp(11.5px,2.5vw,13.5px);
+  letter-spacing:.3em;text-indent:.3em;
+  color:rgba(139,141,146,.65);
   font-variant-numeric:tabular-nums;
   opacity:0;
   transition:opacity .8s var(--ease);
@@ -209,8 +218,15 @@ body{
 #s3{background:#0a0a0b}
 #s3 .cap{
   display:flex;flex-direction:column;align-items:center;
-  padding:0 1rem;
-  max-width:100vw;
+  padding:0 1.4rem;
+  max-width:100%;
+}
+/* S3 三行文字：左对齐但整体居中，避免"参差右偏"的视觉错觉 */
+#s3 .cap .zh.sm{
+  text-align:left;
+}
+#s3 .cap .zh.sm .line i{
+  text-indent:0;
 }
 .swatches{
   position:relative;z-index:5;
@@ -397,7 +413,9 @@ body{
 
 /* ============ 蛋糕 ============ */
 #s5{background:radial-gradient(ellipse at 50% 58%,#1a1416 0%,#08080a 66%)}
-.cake-wrap{position:relative;z-index:5;display:flex;flex-direction:column;align-items:center}
+.cake-wrap{position:relative;z-index:5;display:flex;flex-direction:column;align-items:center;
+  transition:opacity 1.2s var(--ease),transform 1.4s var(--ease)}
+.cake-wrap.fadeout{opacity:0;transform:scale(.94) translateY(10px);pointer-events:none}
 .cake-svg{width:clamp(240px,62vw,420px);height:auto;overflow:visible}
 /* 火焰 */
 .flame{
@@ -459,12 +477,12 @@ body{
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.7rem;
 }
 .blow-tip .t1{
-  font-size:clamp(13px,3vw,17px);letter-spacing:.24em;color:var(--mist);
-  text-indent:.24em;font-weight:200;
+  font-size:clamp(13.5px,3.1vw,18px);letter-spacing:.18em;color:var(--mist);
+  text-indent:.18em;font-weight:400;
 }
 .blow-tip .t2{
-  font-size:clamp(10px,2.3vw,12px);letter-spacing:.2em;color:var(--ash2);
-  text-indent:.2em;min-height:1.2em;
+  font-size:clamp(10.5px,2.4vw,12.5px);letter-spacing:.16em;color:#7d7f86;
+  text-indent:.16em;min-height:1.2em;
 }
 .ripples{display:flex;gap:6px;align-items:center;height:26px}
 .ripples i{
@@ -482,27 +500,83 @@ body{
   background:linear-gradient(90deg,var(--ash),var(--red-soft));
   transition:width .16s linear;
 }
-/* 祝福词 */
+/* 祝福词 —— 吹灭后独占一屏（蛋糕淡出） */
 .wish{
   position:absolute;inset:0;z-index:8;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:1.4rem;padding:0 2rem;text-align:center;
+  gap:0;
+  padding:0 1.4rem;text-align:center;
+  background:radial-gradient(ellipse at 50% 46%, rgba(26,20,22,.92) 0%, rgba(8,8,10,.97) 62%);
   pointer-events:none;opacity:0;transition:opacity 1.6s var(--ease);
 }
 .wish.on{opacity:1;pointer-events:auto}
-.wish .big{
-  font-size:clamp(24px,6.4vw,44px);font-weight:200;letter-spacing:.2em;
-  color:var(--mist);text-indent:.2em;line-height:1.7;
+
+/* 第一行：名字 */
+.wish-name{
+  font-size:clamp(34px,9vw,58px);
+  font-weight:500;
+  letter-spacing:.1em;text-indent:.1em;
+  line-height:1.3;
+  color:var(--mist);
+  text-shadow:0 0 30px rgba(232,233,236,.25);
 }
-.wish .big .rd{color:var(--red-soft)}
-.wish .sub{font-size:clamp(11px,2.6vw,14px);letter-spacing:.34em;color:var(--ash);text-indent:.34em}
+
+/* 第二行：十九 + 岁 + 生日快乐 */
+.wish-age{
+  margin-top:clamp(.7rem,2.2vh,1.2rem);
+  display:flex;align-items:baseline;justify-content:center;
+  flex-wrap:wrap;
+  gap:0;
+  line-height:1.35;
+}
+.wish-age .num{
+  font-size:clamp(30px,8vw,52px);
+  font-weight:500;
+  letter-spacing:.04em;
+  color:var(--red-soft);
+  text-shadow:0 0 34px rgba(224,90,80,.45);
+}
+.wish-age .unit{
+  font-size:clamp(19px,5vw,32px);
+  font-weight:400;
+  letter-spacing:.06em;
+  color:var(--red-soft);
+  margin-left:.1em;
+  opacity:.9;
+}
+.wish-age .bday{
+  font-size:clamp(21px,5.6vw,37px);
+  font-weight:400;
+  letter-spacing:.1em;
+  color:var(--mist);
+  margin-left:.5em;
+}
+
+/* 分隔线 */
+.wish-line{
+  width:clamp(70px,22vw,130px);
+  height:1px;
+  margin:clamp(1.6rem,5vh,2.6rem) 0 clamp(1.1rem,3vh,1.7rem);
+  background:linear-gradient(90deg,transparent,rgba(200,50,43,.75),transparent);
+}
+
+.wish .sub{
+  font-size:clamp(12.5px,2.9vw,15.5px);
+  letter-spacing:.16em;text-indent:.16em;
+  line-height:2.1;
+  color:#9e9fa6;
+  max-width:min(420px,86vw);
+}
 .wish .again{
-  margin-top:.6rem;font-size:12px;letter-spacing:.22em;color:var(--ash2);
-  border:1px solid rgba(232,233,236,.2);padding:.62em 1.5em;border-radius:99px;
-  background:transparent;color:var(--ash);cursor:pointer;font-family:inherit;
+  margin-top:clamp(2rem,5.5vh,3rem);
+  font-size:13px;letter-spacing:.18em;
+  border:1px solid rgba(232,233,236,.22);
+  padding:.75em 1.9em;border-radius:99px;
+  background:transparent;color:var(--ash);cursor:pointer;
+  font-family:inherit;
   transition:.35s var(--ease);
 }
-.wish .again:hover{border-color:rgba(232,233,236,.45);color:var(--mist)}
+.wish .again:hover{border-color:rgba(232,233,236,.5);color:var(--mist)}
 
 /* 头像飘浮（多场景穿插） */
 .float-av{
@@ -810,7 +884,12 @@ body{
 
     <!-- 祝福词 -->
     <div class="wish" id="wish">
-      <div class="big">秦源悦<br><span class="rd">十九岁生日快乐</span></div>
+      <div class="wish-name">秦源悦</div>
+      <div class="wish-age">
+        <span class="num">十九</span><span class="unit">岁</span>
+        <span class="bday">生日快乐</span>
+      </div>
+      <div class="wish-line"></div>
       <div class="sub">愿你永远自由，无拘无束，为自己而活</div>
       <button class="again" id="againBtn">再看一遍</button>
     </div>
@@ -825,6 +904,7 @@ body{
 
 <!-- 音频 -->
 <audio id="bgm" loop preload="auto"></audio>
+<audio id="bell" loop preload="auto"></audio>
 
 <!-- 右下控制 -->
 <div id="hud">
@@ -850,6 +930,7 @@ const SCENES = ['s0','s1','s2','s3','s4','s5'];
 let cur = -1;
 let stageTimer = null;
 const bgm = document.getElementById('bgm');
+const bell = document.getElementById('bell');
 let muted = false;
 
 const $ = id => document.getElementById(id);
@@ -866,6 +947,8 @@ function go(i){
   el.classList.remove('out');
   el.classList.add('on');
   renderPgs();
+  // 离开来电幕时，兜底停掉铃声（防止跳幕时铃声残留）
+  if(i !== 2 && bell && !bell.paused) stopBell(900);
   onEnter(i);
 }
 function nextScene(){ go(cur+1); }
@@ -889,26 +972,35 @@ function renderPgs(){
 }
 
 /* ---------- 音频控制 ----------
-   注意：iOS Safari 要求音频必须在"用户手势的同步调用栈"里首次播放，
+   iOS Safari 要求音频必须在"用户手势的同步调用栈"里首次播放，
    否则后续 play() 会被静默拒绝。unlockAudio() 必须在 click 里同步调用。
+
+   两条音轨：
+     bgm   —— 《特别的人》，全流程循环播放的底乐
+     bell  —— 《好想爱这个世界啊》铃声，只在来电段响
 */
 let audioUnlocked = false;
+
+const TEBIE = 'assets/audio/tebie_intro.mp3';
+const BELL  = 'assets/audio/bell_intro.mp3';
 
 function unlockAudio(){
   if(audioUnlocked) return;
   audioUnlocked = true;
-  try{
-    // 静音播一下再立刻暂停，骗过 iOS 的解锁检测
-    bgm.muted = true;
-    const p = bgm.play();
-    const fin = ()=>{
-      bgm.pause();
-      try{ bgm.currentTime = 0; }catch(e){}
-      bgm.muted = false;
-    };
-    if(p && p.then) p.then(fin).catch(fin);
-    else fin();
-  }catch(e){ bgm.muted = false; }
+  // 主音轨 + 铃声音轨都要各解锁一次
+  [bgm, bell].forEach(el=>{
+    try{
+      el.muted = true;
+      const p = el.play();
+      const fin = ()=>{
+        el.pause();
+        try{ el.currentTime = 0; }catch(e){}
+        el.muted = false;
+      };
+      if(p && p.then) p.then(fin).catch(fin);
+      else fin();
+    }catch(e){ el.muted = false; }
+  });
   // 同时解锁 WebAudio（吹气用）
   try{
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -916,64 +1008,105 @@ function unlockAudio(){
   }catch(e){}
 }
 
-function playBgm(src, opts={}){
-  const {fadeIn=1800, start=0, vol=1} = opts;
-  try{ bgm.pause(); }catch(e){}
-  bgm.src = src;
-  bgm.volume = 0;
-  bgm._targetVol = muted ? 0 : vol;
-  bgm._wantedStart = start;
-  // 设置 currentTime 在 metadata 就绪后才可靠
-  const seek = ()=>{ try{ bgm.currentTime = start; }catch(e){} };
-  if(bgm.readyState >= 1) seek();
-  else bgm.addEventListener('loadedmetadata', seek, {once:true});
+/* 通用淡入淡出：对任意 audio 元素 */
+function fadeEl(el, target, dur, onEnd){
+  cancelAnimationFrame(el._fadeRAF);
+  const t0 = performance.now(), v0 = el.volume;
+  function step(t){
+    const k = Math.min(1,(t-t0)/dur);
+    el.volume = Math.max(0, Math.min(1, v0 + (target-v0)*k));
+    if(k<1) el._fadeRAF = requestAnimationFrame(step);
+    else if(onEnd) onEnd();
+  }
+  el._fadeRAF = requestAnimationFrame(step);
+}
 
-  const p = bgm.play();
+/* 播放某条音轨 */
+function playEl(el, src, opts={}){
+  const {fadeIn=1800, start=0, vol=1} = opts;
+  try{ el.pause(); }catch(e){}
+  if(el.src.indexOf(src) === -1) el.src = src;
+  el.loop = true;                    // 单曲循环
+  el.volume = 0;
+  el._targetVol = muted ? 0 : vol;
+  el._wantedStart = start;
+  const seek = ()=>{ try{ el.currentTime = start; }catch(e){} };
+  if(el.readyState >= 1) seek();
+  else el.addEventListener('loadedmetadata', seek, {once:true});
+
+  const p = el.play();
   if(p && p.catch){
     p.catch(()=>{
-      // 播放被拒（多半是没解锁）→ 等下一次用户交互后重试
       const retry = ()=>{
         document.removeEventListener('click', retry);
         document.removeEventListener('touchstart', retry);
-        if(bgm.src && bgm.paused){
-          const rp = bgm.play();
+        if(el.src && el.paused){
+          const rp = el.play();
           if(rp && rp.catch) rp.catch(()=>{});
-          fadeTo(bgm._targetVol, 600);
+          fadeEl(el, el._targetVol, 600);
         }
       };
       document.addEventListener('click', retry, {once:true});
       document.addEventListener('touchstart', retry, {once:true});
     });
   }
-  fadeTo(bgm._targetVol, fadeIn);
+  fadeEl(el, el._targetVol, fadeIn);
 }
-function fadeTo(target, dur){
-  cancelAnimationFrame(bgm._fadeRAF);
-  const t0 = performance.now(), v0 = bgm.volume;
+
+/* 停止某条音轨（淡出后暂停） */
+function stopEl(el, dur=1200){
+  cancelAnimationFrame(el._fadeRAF);
+  const t0 = performance.now(), v0 = el.volume;
   function step(t){
     const k = Math.min(1,(t-t0)/dur);
-    bgm.volume = Math.max(0, Math.min(1, v0 + (target-v0)*k));
-    if(k<1) bgm._fadeRAF = requestAnimationFrame(step);
+    el.volume = Math.max(0, v0*(1-k));
+    if(k<1) el._fadeRAF = requestAnimationFrame(step);
+    else { try{ el.pause(); }catch(e){} }
   }
-  bgm._fadeRAF = requestAnimationFrame(step);
+  el._fadeRAF = requestAnimationFrame(step);
 }
-function fadeOutBgm(dur=1200){
-  cancelAnimationFrame(bgm._fadeRAF);
-  const t0 = performance.now(), v0 = bgm.volume;
-  function step(t){
-    const k = Math.min(1,(t-t0)/dur);
-    bgm.volume = Math.max(0, v0*(1-k));
-    if(k<1) bgm._fadeRAF = requestAnimationFrame(step);
-    else { try{ bgm.pause(); }catch(e){} }
+
+/* —— 语义化的上层封装 —— */
+function playBgm(src, opts){ playEl(bgm, src, opts); }
+function fadeOutBgm(dur){ stopEl(bgm, dur); }
+function playBell(){ playEl(bell, BELL, {fadeIn:900, start:0, vol:.9}); }
+function stopBell(dur=1200){ stopEl(bell, dur); }
+
+/* 恢复底乐（每个场景进入时调用，保证"除铃声和吹蜡烛外都在放《特别的人》"） */
+function ensureBgm(){
+  // 若已在播且没被暂停，只需把音量拉回目标值
+  if(!bgm.paused && bgm.src && bgm.src.indexOf(TEBIE) !== -1){
+    bgm._targetVol = muted ? 0 : .85;
+    if(bgm.volume < bgm._targetVol) fadeEl(bgm, bgm._targetVol, 900);
+    return;
   }
-  bgm._fadeRAF = requestAnimationFrame(step);
+  // 否则从当前位置续播（不重置 currentTime，保持连贯）
+  bgm._targetVol = muted ? 0 : .85;
+  if(bgm.src && bgm.src.indexOf(TEBIE) !== -1 && bgm.currentTime > 0){
+    const p = bgm.play();
+    if(p && p.catch) p.catch(()=>{});
+    bgm.loop = true;
+    fadeEl(bgm, bgm._targetVol, 900);
+  } else {
+    playBgm(TEBIE, {fadeIn:2000, start:0, vol:.85});
+  }
 }
+
 $('muteBtn').onclick = (e)=>{
   e.stopPropagation();
   muted = !muted;
   $('muteBtn').classList.toggle('mute', muted);
-  if(muted){ cancelAnimationFrame(bgm._fadeRAF); bgm._targetVol = 0; bgm.volume = 0; }
-  else { bgm._targetVol = 1; fadeTo(.9, 400); }
+  if(muted){
+    cancelAnimationFrame(bgm._fadeRAF);
+    cancelAnimationFrame(bell._fadeRAF);
+    bgm._targetVol = 0; bgm.volume = 0;
+    bell._targetVol = 0; bell.volume = 0;
+  }else{
+    bgm._targetVol = .85;
+    bell._targetVol = .9;
+    if(!bgm.paused) fadeEl(bgm, .85, 400);
+    if(!bell.paused) fadeEl(bell, .9, 400);
+  }
 };
 
 /* =========================================================
@@ -1023,7 +1156,7 @@ function jasmineRain(canvasId){
         x: W*px, y: H*py, r: r*S,
         rot: (Math.random()-.5)*1.6,
         a: 0,
-        ta: .55 + depth*.45,
+        ta: .78 + depth*.22,
         depth: depth,
         sway: Math.random()*Math.PI*2,
         swaySpd: .0005 + Math.random()*.0007,
@@ -1041,7 +1174,7 @@ function jasmineRain(canvasId){
     const sway = Math.sin(t*f.swaySpd + f.sway) * (.03 + f.shake*.055);
     const sc = 1 + f.shake*.05;
     // 远景降低对比度
-    const dim = .62 + f.depth*.38;
+    const dim = .78 + f.depth*.22;
 
     ctx.save();
     ctx.translate(x, y);
@@ -1052,13 +1185,13 @@ function jasmineRain(canvasId){
     // 外发光（让花瓣在暗底上"浮"起来）
     ctx.save();
     const glow = ctx.createRadialGradient(0,0,0, 0,0, r*1.5);
-    glow.addColorStop(0, `rgba(255,255,255,${.10*dim})`);
+    glow.addColorStop(0, `rgba(255,255,255,${.16*dim})`);
     glow.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = glow;
     ctx.beginPath(); ctx.arc(0,0,r*1.5,0,Math.PI*2); ctx.fill();
     ctx.restore();
 
-    // 花瓣（后层先画，制造层叠；后层很淡，避免叠加发灰）
+    // 花瓣（后层先画，制造层叠；后层稍淡，避免叠加发灰）
     for(let layer=0; layer<2; layer++){
       const isBack = layer === 0;
       for(let i=0;i<5;i++){
@@ -1072,22 +1205,22 @@ function jasmineRain(canvasId){
         ctx.bezierCurveTo(-Wd*.86, -R*.80, -Wd*.55, -R*.26,  0, 0);
         const g = ctx.createLinearGradient(0, 0, 0, -R);
         if(isBack){
-          // 后层：极淡，仅提供轮廓层次
-          g.addColorStop(0,   `rgba(255,255,255,${.26*dim+.06})`);
-          g.addColorStop(.6,  `rgba(226,231,240,${.18*dim+.05})`);
-          g.addColorStop(1,   `rgba(180,188,202,${.10*dim+.03})`);
+          // 后层：提供轮廓层次
+          g.addColorStop(0,   `rgba(255,255,255,${.46*dim+.08})`);
+          g.addColorStop(.6,  `rgba(230,235,244,${.34*dim+.06})`);
+          g.addColorStop(1,   `rgba(186,194,208,${.20*dim+.04})`);
         }else{
-          // 前层：莹白（主视觉）
-          g.addColorStop(0,   `rgba(255,255,255,${.99})`);
-          g.addColorStop(.40, `rgba(253,254,255,${.95*dim+.04})`);
-          g.addColorStop(.80, `rgba(232,237,245,${.82*dim+.10})`);
-          g.addColorStop(1,   `rgba(168,176,192,${.46*dim+.10})`);
+          // 前层：莹白（主视觉，提亮）
+          g.addColorStop(0,   `rgba(255,255,255,1)`);
+          g.addColorStop(.40, `rgba(255,255,255,${.99*dim+.01})`);
+          g.addColorStop(.80, `rgba(240,244,250,${.94*dim+.05})`);
+          g.addColorStop(1,   `rgba(190,198,212,${.62*dim+.08})`);
         }
         ctx.fillStyle = g;
         ctx.fill();
         if(!isBack){
-          ctx.strokeStyle = `rgba(255,255,255,${(.34+f.shine*.50)*dim})`;
-          ctx.lineWidth = .6;
+          ctx.strokeStyle = `rgba(255,255,255,${(.55+f.shine*.42)*dim})`;
+          ctx.lineWidth = .8;
           ctx.stroke();
         }
         ctx.restore();
@@ -1301,33 +1434,38 @@ const letterData = [
 function onEnter(i){
   switch(i){
     case 0:
-      // 静默，等点击
+      // 静默，等点击（点击后才解锁音频）
       break;
 
     case 1:
-      playBgm('assets/audio/tebie_intro.mp3', {fadeIn:2600, start:22, vol:.85});
+      // 茉莉雨 —— 播《特别的人》
+      playBgm(TEBIE, {fadeIn:2600, start:22, vol:.85});
       if(!jr) jr = jasmineRain('cv1');
-      // 等场景过渡可见后再测量尺寸
       requestAnimationFrame(()=> requestAnimationFrame(()=> jr.start()));
       setTimeout(()=> jr.resize(), 400);
       break;
 
     case 2:
-      // 按需求：来电段不放音乐
-      fadeOutBgm(1600);
+      // 来电 —— 停《特别的人》，改放《好想爱这个世界啊》铃声
+      fadeOutBgm(1400);
+      playBell();
       runCallSequence();
       break;
 
     case 3:
-      playBgm('assets/audio/tebie_intro.mp3', {fadeIn:2200, start:40, vol:.7});
+      // 色彩 —— 回到底乐《特别的人》
+      stopBell(900);
+      playBgm(TEBIE, {fadeIn:2200, start:40, vol:.82});
       break;
 
     case 4:
-      fadeOutBgm(2000);
+      // 信 —— 《特别的人》继续（若已停则恢复）
+      ensureBgm();
       buildLetter();
       break;
 
     case 5:
+      // 蛋糕 —— 先停底乐，等吹灭后再从 0 循环放
       fadeOutBgm(1200);
       startCake();
       break;
@@ -1416,6 +1554,8 @@ function startCake(){
   if(ageGlow){ ageGlow.classList.remove('gone'); ageGlow.classList.add('on'); }
   if(ageSmoke){ ageSmoke.classList.remove('on'); }
   $('wish').classList.remove('on');
+  const cw = document.querySelector('.cake-wrap');
+  if(cw) cw.classList.remove('fadeout');
   $('blowT1').textContent = '对着屏幕，轻轻吹一口气';
   $('blowT2').textContent = '许个愿，然后吹灭它';
   $('breathFill').style.width = '0%';
@@ -1547,8 +1687,15 @@ function doBlow(){
   $('breathFill').style.width = '100%';
   // 祝福词
   setTimeout(()=> $('wish').classList.add('on'), 1300);
-  // 放一点点 BGM 收尾
-  setTimeout(()=> playBgm('assets/audio/tebie_intro.mp3',{fadeIn:3000, start:8, vol:.6}), 1400);
+  // 祝福词占据主视觉 → 蛋糕淡出，避免叠加
+  setTimeout(()=>{
+    const cw = document.querySelector('.cake-wrap');
+    if(cw) cw.classList.add('fadeout');
+  }, 1500);
+  // 吹灭后：《特别的人》重新从 0 开始，循环播放
+  setTimeout(()=>{
+    playBgm(TEBIE, {fadeIn:2600, start:0, vol:.78});
+  }, 1500);
 }
 
 /* ---------- 头像飘浮 ---------- */
@@ -1580,6 +1727,9 @@ function spawnFloatAvatars(){
 
 $('againBtn').onclick = ()=>{
   $('wish').classList.remove('on');
+  // 蛋糕重新浮现
+  const cw = document.querySelector('.cake-wrap');
+  if(cw) cw.classList.remove('fadeout');
   setTimeout(startCake, 700);
 };
 
@@ -1714,6 +1864,16 @@ $('gateBtn').onclick = ()=>{
   // 蛋糕幕：为拍照先直接吹灭并显示祝福（加 noBlow 可跳过）
   if(i===5 && !/noBlow/.test(location.search + location.hash)){
     setTimeout(()=>{ if(!blown) doBlow(); }, 900);
+  }
+  // 单独看祝福词排版：加 wish 参数立刻显示（跳过动画）
+  if(/[?&#]wish/.test(location.search + location.hash)){
+    setTimeout(()=>{
+      const w = $('wish');
+      w.style.transition = 'none';
+      w.classList.add('on');
+      const cw = document.querySelector('.cake-wrap');
+      if(cw){ cw.style.transition = 'none'; cw.classList.add('fadeout'); }
+    }, 400);
   }
 })();
 </script>
