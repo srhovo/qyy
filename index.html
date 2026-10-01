@@ -902,9 +902,9 @@ body{
 <div id="next">轻触继续</div>
 <div id="skip">跳过</div>
 
-<!-- 音频 -->
-<audio id="bgm" loop preload="auto"></audio>
-<audio id="bell" loop preload="auto"></audio>
+<!-- 音频（src 直接写在标签上，让浏览器尽早开始预加载） -->
+<audio id="bgm" loop preload="auto" src="assets/audio/tebie_intro.mp3"></audio>
+<audio id="bell" loop preload="auto" src="assets/audio/bell_intro.mp3"></audio>
 
 <!-- 右下控制 -->
 <div id="hud">
@@ -984,22 +984,43 @@ let audioUnlocked = false;
 const TEBIE = 'assets/audio/tebie_intro.mp3';
 const BELL  = 'assets/audio/bell_intro.mp3';
 
+/* 预加载：给两个 audio 元素早早设上 src 并触发 load，
+   避免首次 play() 时还没数据（readyState=0 会静默播不出声音）。 */
+(function preloadAudio(){
+  const items = [[bgm, TEBIE], [bell, BELL]];
+  for(const [el, src] of items){
+    try{
+      el.preload = 'auto';
+      el.setAttribute('src', src);
+      el.load();
+    }catch(e){}
+  }
+})();
+
 function unlockAudio(){
   if(audioUnlocked) return;
   audioUnlocked = true;
-  // 主音轨 + 铃声音轨都要各解锁一次
+  // 静音起播一下，骗过 iOS/Chrome 的"必须用户手势"限制。
+  // 关键：用 _unlocking 标志把这段"解锁试探"和真正的场景播放隔离开，
+  // 一旦场景开始播放（_playing=true），立刻放弃回退，绝不打断。
   [bgm, bell].forEach(el=>{
     try{
-      el.muted = true;
-      const p = el.play();
+      if(!el.getAttribute('src')) return;
+      el._unlocking = true;
+      el.muted = true;          // 静音解锁，不发声
+      el.volume = 0;            // 顺带把音量归零，避免回退前满音量残留
       const fin = ()=>{
-        el.pause();
+        el._unlocking = false;
+        if(el._playing) return;        // 已被真实播放接管 → 什么都不做
+        try{ el.pause(); }catch(e){}
         try{ el.currentTime = 0; }catch(e){}
+        el.volume = 0;                 // 归零，避免满音量残留
         el.muted = false;
       };
+      const p = el.play();
       if(p && p.then) p.then(fin).catch(fin);
       else fin();
-    }catch(e){ el.muted = false; }
+    }catch(e){ el._unlocking = false; el.muted = false; }
   });
   // 同时解锁 WebAudio（吹气用）
   try{
@@ -1008,62 +1029,134 @@ function unlockAudio(){
   }catch(e){}
 }
 
-/* 通用淡入淡出：对任意 audio 元素 */
+/* 通用淡入淡出：对任意 audio 元素
+   注意：不能只靠 requestAnimationFrame —— 后台标签页/省电模式下 rAF 会被节流
+   甚至完全暂停，导致音量卡在 0（表现为"在播但没声音"）。
+   这里用 rAF + setInterval 双保险。 */
 function fadeEl(el, target, dur, onEnd){
   cancelAnimationFrame(el._fadeRAF);
+  clearInterval(el._fadeTICK);
   const t0 = performance.now(), v0 = el.volume;
-  function step(t){
-    const k = Math.min(1,(t-t0)/dur);
-    el.volume = Math.max(0, Math.min(1, v0 + (target-v0)*k));
-    if(k<1) el._fadeRAF = requestAnimationFrame(step);
-    else if(onEnd) onEnd();
-  }
-  el._fadeRAF = requestAnimationFrame(step);
+  let done = false;
+  const finish = ()=>{
+    if(done) return;
+    done = true;
+    cancelAnimationFrame(el._fadeRAF);
+    clearInterval(el._fadeTICK);
+    el.volume = Math.max(0, Math.min(1, target));
+    if(onEnd) onEnd();
+  };
+  const step = (now)=>{
+    const k = Math.min(1, (now - t0) / dur);
+    el.volume = Math.max(0, Math.min(1, v0 + (target - v0) * k));
+    if(k >= 1) finish();
+  };
+  if(dur <= 0){ finish(); return; }
+  el._fadeRAF = requestAnimationFrame(function loop(t){
+    step(t);
+    if(!done) el._fadeRAF = requestAnimationFrame(loop);
+  });
+  el._fadeTICK = setInterval(()=> step(performance.now()), 50);
+}
+
+/* 等待音频可播（readyState 足够）后再执行 cb，带超时兜底 */
+function whenReady(el, cb, timeoutMs=4000){
+  if(el.readyState >= 2){ cb(); return; }      // HAVE_CURRENT_DATA 以上
+  let fired = false;
+  const go = ()=>{ if(fired) return; fired = true; cleanup(); cb(); };
+  const cleanup = ()=>{
+    el.removeEventListener('canplay', go);
+    el.removeEventListener('loadeddata', go);
+    el.removeEventListener('error', go);
+    clearTimeout(el._readyTimer);
+  };
+  el.addEventListener('canplay', go, {once:true});
+  el.addEventListener('loadeddata', go, {once:true});
+  el.addEventListener('error', go, {once:true});
+  el._readyTimer = setTimeout(go, timeoutMs);
+  // 主动催一下加载
+  try{ if(el.readyState === 0) el.load(); }catch(e){}
 }
 
 /* 播放某条音轨 */
 function playEl(el, src, opts={}){
   const {fadeIn=1800, start=0, vol=1} = opts;
-  try{ el.pause(); }catch(e){}
-  if(el.src.indexOf(src) === -1) el.src = src;
-  el.loop = true;                    // 单曲循环
-  el.volume = 0;
+  el._unlocking = false;   // 真实播放接管 → 取消解锁试探
+  el.muted = false;        // 元素不静音，音量由 volume 控制
+  el._playing = true;
   el._targetVol = muted ? 0 : vol;
-  el._wantedStart = start;
-  const seek = ()=>{ try{ el.currentTime = start; }catch(e){} };
-  if(el.readyState >= 1) seek();
-  else el.addEventListener('loadedmetadata', seek, {once:true});
 
-  const p = el.play();
-  if(p && p.catch){
-    p.catch(()=>{
-      const retry = ()=>{
-        document.removeEventListener('click', retry);
-        document.removeEventListener('touchstart', retry);
-        if(el.src && el.paused){
-          const rp = el.play();
-          if(rp && rp.catch) rp.catch(()=>{});
-          fadeEl(el, el._targetVol, 600);
-        }
-      };
-      document.addEventListener('click', retry, {once:true});
-      document.addEventListener('touchstart', retry, {once:true});
-    });
+  const begin = ()=>{
+    el.loop = true;
+    el._targetVol = muted ? 0 : vol;
+    // 设起点（metadata 就绪后 currentTime 才可写）
+    const seek = ()=>{ try{ el.currentTime = start; }catch(e){} };
+    if(el.readyState >= 1) seek();
+    else el.addEventListener('loadedmetadata', seek, {once:true});
+
+    // 先静音起播，避免突然的满音量爆音
+    el.volume = 0;
+    const p = el.play();
+    if(p && p.catch){
+      p.catch(()=>{
+        // 播放被拒（多半是没解锁）→ 等下一次用户交互后重试
+        const retry = ()=>{
+          document.removeEventListener('click', retry);
+          document.removeEventListener('touchstart', retry);
+          if(el._playing && el.paused){
+            const rp = el.play();
+            if(rp && rp.catch) rp.catch(()=>{});
+            fadeEl(el, el._targetVol, 600);
+          }
+        };
+        document.addEventListener('click', retry, {once:true});
+        document.addEventListener('touchstart', retry, {once:true});
+      });
+    }
+    fadeEl(el, el._targetVol, fadeIn);
+  };
+
+  // 切换曲目才重设 src；同一首则续播
+  const cur = el.getAttribute('src') || '';
+  if(cur !== src){
+    el.pause();
+    el.setAttribute('src', src);
+    el.load();
+    el._playing = true;
+    whenReady(el, begin);
+  }else{
+    el._playing = true;
+    if(el.readyState >= 2) begin();
+    else whenReady(el, begin);
   }
-  fadeEl(el, el._targetVol, fadeIn);
 }
 
 /* 停止某条音轨（淡出后暂停） */
 function stopEl(el, dur=1200){
+  el._playing = false;
   cancelAnimationFrame(el._fadeRAF);
+  clearInterval(el._fadeTICK);
   const t0 = performance.now(), v0 = el.volume;
-  function step(t){
-    const k = Math.min(1,(t-t0)/dur);
+  let done = false;
+  const finish = ()=>{
+    if(done) return;
+    done = true;
+    cancelAnimationFrame(el._fadeRAF);
+    clearInterval(el._fadeTICK);
+    el.volume = 0;
+    try{ el.pause(); }catch(e){}
+  };
+  const step = (now)=>{
+    const k = Math.min(1,(now-t0)/dur);
     el.volume = Math.max(0, v0*(1-k));
-    if(k<1) el._fadeRAF = requestAnimationFrame(step);
-    else { try{ el.pause(); }catch(e){} }
-  }
-  el._fadeRAF = requestAnimationFrame(step);
+    if(k >= 1) finish();
+  };
+  if(dur <= 0){ finish(); return; }
+  el._fadeRAF = requestAnimationFrame(function loop(t){
+    step(t);
+    if(!done) el._fadeRAF = requestAnimationFrame(loop);
+  });
+  el._fadeTICK = setInterval(()=> step(performance.now()), 50);
 }
 
 /* —— 语义化的上层封装 —— */
@@ -1074,22 +1167,23 @@ function stopBell(dur=1200){ stopEl(bell, dur); }
 
 /* 恢复底乐（每个场景进入时调用，保证"除铃声和吹蜡烛外都在放《特别的人》"） */
 function ensureBgm(){
-  // 若已在播且没被暂停，只需把音量拉回目标值
-  if(!bgm.paused && bgm.src && bgm.src.indexOf(TEBIE) !== -1){
-    bgm._targetVol = muted ? 0 : .85;
-    if(bgm.volume < bgm._targetVol) fadeEl(bgm, bgm._targetVol, 900);
+  const target = muted ? 0 : .85;
+  bgm.loop = true;
+  // 已在同一首曲子上 → 续播/恢复音量，不重置进度
+  const onTeibe = (bgm.getAttribute('src') || '') === TEBIE;
+  if(onTeibe && bgm._playing){
+    if(bgm.paused){
+      // 被暂停过 → 从当前位置续播
+      bgm._playing = true;
+      const p = bgm.play();
+      if(p && p.catch) p.catch(()=>{});
+    }
+    bgm._targetVol = target;
+    if(Math.abs(bgm.volume - target) > .01) fadeEl(bgm, target, 900);
     return;
   }
-  // 否则从当前位置续播（不重置 currentTime，保持连贯）
-  bgm._targetVol = muted ? 0 : .85;
-  if(bgm.src && bgm.src.indexOf(TEBIE) !== -1 && bgm.currentTime > 0){
-    const p = bgm.play();
-    if(p && p.catch) p.catch(()=>{});
-    bgm.loop = true;
-    fadeEl(bgm, bgm._targetVol, 900);
-  } else {
-    playBgm(TEBIE, {fadeIn:2000, start:0, vol:.85});
-  }
+  // 当前不在《特别的人》上（比如刚从铃声切回）→ 从头播
+  playBgm(TEBIE, {fadeIn:2000, start:0, vol:.85});
 }
 
 $('muteBtn').onclick = (e)=>{
