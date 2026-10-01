@@ -948,7 +948,7 @@ function go(i){
   el.classList.add('on');
   renderPgs();
   // 离开来电幕时，兜底停掉铃声（防止跳幕时铃声残留）
-  if(i !== 2 && bell && !bell.paused) stopBell(900);
+  if(i !== 2 && bell && !bell.paused) bellStop(700);
   onEnter(i);
 }
 function nextScene(){ go(cur+1); }
@@ -976,22 +976,42 @@ function renderPgs(){
    否则后续 play() 会被静默拒绝。unlockAudio() 必须在 click 里同步调用。
 
    两条音轨：
-     bgm   —— 《特别的人》，全流程循环播放的底乐
-     bell  —— 《好想爱这个世界啊》铃声，只在来电段响
+     bgm   —— 《特别的人》，从页面打开到结束**连续播放**的背景底乐，
+              只在「微信来电」和「吹蜡烛」两种时刻暂停，
+              离开这两个时刻后**从暂停处接着播**（绝不回到开头）。
+     bell  —— 《好想爱这个世界啊》铃声，只在来电段响。
+
+   设计要点（这是本模块的全部复杂度所在）：
+     1. bgm 永不 seek、永不重设 src —— 只 play()/pause()。
+        暂停天然保留 currentTime，恢复时自然接着播。
+     2. 音量淡入淡出承担"接续"的听感：暂停前淡出、恢复时淡入，
+        但 currentTime 始终连续。
+     3. 所有音量渐变都用 rAF + setInterval 双驱动 ——
+        后台标签页/省电模式会冻结 rAF，只用 rAF 会让音量卡在 0。
 */
 let audioUnlocked = false;
 
 const TEBIE = 'assets/audio/tebie_intro.mp3';
 const BELL  = 'assets/audio/bell_intro.mp3';
 
+/* 底乐的目标音量（0~1）。静音时对外表现为 0。 */
+const BGM_VOL = .85;
+const BELL_VOL = .90;
+
+/* 底乐"应该处于播放态"还是"应该暂停"——这是唯一的意图来源。
+   场景切换只改这个意图，再由 syncBgm() 去执行。 */
+let bgmIntent = 'idle';   // 'idle' | 'play' | 'pause'
+
 /* 预加载：给两个 audio 元素早早设上 src 并触发 load，
-   避免首次 play() 时还没数据（readyState=0 会静默播不出声音）。 */
+   避免首次 play() 时还没数据（readyState=0 会静默播不出声音）。
+   注意给 bgm 打上 loop —— 单曲循环，曲终自动接上。 */
 (function preloadAudio(){
   const items = [[bgm, TEBIE], [bell, BELL]];
   for(const [el, src] of items){
     try{
       el.preload = 'auto';
-      el.setAttribute('src', src);
+      el.loop = true;
+      if(el.getAttribute('src') !== src) el.setAttribute('src', src);
       el.load();
     }catch(e){}
   }
@@ -1001,20 +1021,20 @@ function unlockAudio(){
   if(audioUnlocked) return;
   audioUnlocked = true;
   // 静音起播一下，骗过 iOS/Chrome 的"必须用户手势"限制。
-  // 关键：用 _unlocking 标志把这段"解锁试探"和真正的场景播放隔离开，
-  // 一旦场景开始播放（_playing=true），立刻放弃回退，绝不打断。
+  // 关键：这段"解锁试探"绝不能打断真正的播放 ——
+  // 用 _unlocking 标志隔离，一旦真实播放接管（_playing=true），立刻放弃回退。
   [bgm, bell].forEach(el=>{
     try{
       if(!el.getAttribute('src')) return;
       el._unlocking = true;
       el.muted = true;          // 静音解锁，不发声
-      el.volume = 0;            // 顺带把音量归零，避免回退前满音量残留
+      el.volume = 0;            // 音量归零，避免回退前满音量残留
       const fin = ()=>{
         el._unlocking = false;
         if(el._playing) return;        // 已被真实播放接管 → 什么都不做
         try{ el.pause(); }catch(e){}
         try{ el.currentTime = 0; }catch(e){}
-        el.volume = 0;                 // 归零，避免满音量残留
+        el.volume = 0;
         el.muted = false;
       };
       const p = el.play();
@@ -1032,10 +1052,11 @@ function unlockAudio(){
 /* 通用淡入淡出：对任意 audio 元素
    注意：不能只靠 requestAnimationFrame —— 后台标签页/省电模式下 rAF 会被节流
    甚至完全暂停，导致音量卡在 0（表现为"在播但没声音"）。
-   这里用 rAF + setInterval 双保险。 */
+   这里用 rAF + setInterval 双保险，谁先跑到终点算谁。 */
 function fadeEl(el, target, dur, onEnd){
   cancelAnimationFrame(el._fadeRAF);
   clearInterval(el._fadeTICK);
+  target = Math.max(0, Math.min(1, target));
   const t0 = performance.now(), v0 = el.volume;
   let done = false;
   const finish = ()=>{
@@ -1043,7 +1064,7 @@ function fadeEl(el, target, dur, onEnd){
     done = true;
     cancelAnimationFrame(el._fadeRAF);
     clearInterval(el._fadeTICK);
-    el.volume = Math.max(0, Math.min(1, target));
+    el.volume = target;
     if(onEnd) onEnd();
   };
   const step = (now)=>{
@@ -1056,11 +1077,12 @@ function fadeEl(el, target, dur, onEnd){
     step(t);
     if(!done) el._fadeRAF = requestAnimationFrame(loop);
   });
+  // 双保险：rAF 被冻结时由 setInterval 兜底推进
   el._fadeTICK = setInterval(()=> step(performance.now()), 50);
 }
 
 /* 等待音频可播（readyState 足够）后再执行 cb，带超时兜底 */
-function whenReady(el, cb, timeoutMs=4000){
+function whenReady(el, cb, timeoutMs=5000){
   if(el.readyState >= 2){ cb(); return; }      // HAVE_CURRENT_DATA 以上
   let fired = false;
   const go = ()=>{ if(fired) return; fired = true; cleanup(); cb(); };
@@ -1074,32 +1096,32 @@ function whenReady(el, cb, timeoutMs=4000){
   el.addEventListener('loadeddata', go, {once:true});
   el.addEventListener('error', go, {once:true});
   el._readyTimer = setTimeout(go, timeoutMs);
-  // 主动催一下加载
   try{ if(el.readyState === 0) el.load(); }catch(e){}
 }
 
-/* 播放某条音轨 */
-function playEl(el, src, opts={}){
-  const {fadeIn=1800, start=0, vol=1} = opts;
-  el._unlocking = false;   // 真实播放接管 → 取消解锁试探
-  el.muted = false;        // 元素不静音，音量由 volume 控制
+/* 真正让某条音轨出声：保持当前 currentTime，淡入到目标音量。
+   绝不 seek —— 这是"接续播放"的关键。 */
+function startEl(el, vol, fadeIn){
   el._playing = true;
-  el._targetVol = muted ? 0 : vol;
+  el._unlocking = false;
+  el.muted = false;
+  const target = muted ? 0 : vol;
+  el._targetVol = target;
 
   const begin = ()=>{
     el.loop = true;
     el._targetVol = muted ? 0 : vol;
-    // 设起点（metadata 就绪后 currentTime 才可写）
-    const seek = ()=>{ try{ el.currentTime = start; }catch(e){} };
-    if(el.readyState >= 1) seek();
-    else el.addEventListener('loadedmetadata', seek, {once:true});
-
-    // 先静音起播，避免突然的满音量爆音
-    el.volume = 0;
+    // 已在播：只把音量淡到目标，不碰 currentTime
+    if(!el.paused){
+      if(Math.abs(el.volume - el._targetVol) > .005) fadeEl(el, el._targetVol, fadeIn);
+      else el.volume = el._targetVol;
+      return;
+    }
+    const from = el.volume;               // 从当前音量平滑淡入
     const p = el.play();
     if(p && p.catch){
       p.catch(()=>{
-        // 播放被拒（多半是没解锁）→ 等下一次用户交互后重试
+        // 被拒（多半是未解锁）→ 等下一次用户交互后重试
         const retry = ()=>{
           document.removeEventListener('click', retry);
           document.removeEventListener('touchstart', retry);
@@ -1116,23 +1138,12 @@ function playEl(el, src, opts={}){
     fadeEl(el, el._targetVol, fadeIn);
   };
 
-  // 切换曲目才重设 src；同一首则续播
-  const cur = el.getAttribute('src') || '';
-  if(cur !== src){
-    el.pause();
-    el.setAttribute('src', src);
-    el.load();
-    el._playing = true;
-    whenReady(el, begin);
-  }else{
-    el._playing = true;
-    if(el.readyState >= 2) begin();
-    else whenReady(el, begin);
-  }
+  if(el.readyState >= 2) begin();
+  else whenReady(el, begin);
 }
 
-/* 停止某条音轨（淡出后暂停） */
-function stopEl(el, dur=1200){
+/* 淡出并暂停某条音轨（保留 currentTime，供日后接着播） */
+function pauseEl(el, dur, onEnd){
   el._playing = false;
   cancelAnimationFrame(el._fadeRAF);
   clearInterval(el._fadeTICK);
@@ -1143,8 +1154,10 @@ function stopEl(el, dur=1200){
     done = true;
     cancelAnimationFrame(el._fadeRAF);
     clearInterval(el._fadeTICK);
+    // 暂停前把音量归零；currentTime 原样保留 → 下次接着播
     el.volume = 0;
-    try{ el.pause(); }catch(e){}
+    try{ if(!el.paused) el.pause(); }catch(e){}
+    if(onEnd) onEnd();
   };
   const step = (now)=>{
     const k = Math.min(1,(now-t0)/dur);
@@ -1159,49 +1172,63 @@ function stopEl(el, dur=1200){
   el._fadeTICK = setInterval(()=> step(performance.now()), 50);
 }
 
-/* —— 语义化的上层封装 —— */
-function playBgm(src, opts){ playEl(bgm, src, opts); }
-function fadeOutBgm(dur){ stopEl(bgm, dur); }
-function playBell(){ playEl(bell, BELL, {fadeIn:900, start:0, vol:.9}); }
-function stopBell(dur=1200){ stopEl(bell, dur); }
+/* ── 底乐（《特别的人》）的三个操作 ─────────────────────────── */
 
-/* 恢复底乐（每个场景进入时调用，保证"除铃声和吹蜡烛外都在放《特别的人》"） */
-function ensureBgm(){
-  const target = muted ? 0 : .85;
-  bgm.loop = true;
-  // 已在同一首曲子上 → 续播/恢复音量，不重置进度
-  const onTeibe = (bgm.getAttribute('src') || '') === TEBIE;
-  if(onTeibe && bgm._playing){
-    if(bgm.paused){
-      // 被暂停过 → 从当前位置续播
-      bgm._playing = true;
-      const p = bgm.play();
-      if(p && p.catch) p.catch(()=>{});
-    }
-    bgm._targetVol = target;
-    if(Math.abs(bgm.volume - target) > .01) fadeEl(bgm, target, 900);
-    return;
-  }
-  // 当前不在《特别的人》上（比如刚从铃声切回）→ 从头播
-  playBgm(TEBIE, {fadeIn:2000, start:0, vol:.85});
+/* 让底乐开始/继续播放（从暂停处接着播，不回到开头） */
+function bgmPlay(fadeIn=1200){
+  bgmIntent = 'play';
+  startEl(bgm, BGM_VOL, muted ? 0 : fadeIn);
+  // 立刻淡出铃声（若正在响）
+  if(!bell.paused) pauseEl(bell, 700);
 }
 
+/* 让底乐淡出暂停（保留进度） */
+function bgmPause(fadeOut=1200){
+  bgmIntent = 'pause';
+  pauseEl(bgm, fadeOut);
+}
+
+/* 按当前意图重新同步底乐状态（窗口可见性变化等场景用） */
+function syncBgm(){
+  if(!audioUnlocked) return;
+  if(bgmIntent === 'play'){
+    startEl(bgm, BGM_VOL, 800);
+  }
+}
+
+/* ── 铃声（《好想爱这个世界啊》）只在来电段 ─────────────────── */
+function bellStart(){
+  startEl(bell, BELL_VOL, 600);
+}
+function bellStop(dur=900){
+  pauseEl(bell, dur);
+}
+
+/* 静音开关 */
 $('muteBtn').onclick = (e)=>{
   e.stopPropagation();
   muted = !muted;
   $('muteBtn').classList.toggle('mute', muted);
+  cancelAnimationFrame(bgm._fadeRAF); clearInterval(bgm._fadeTICK);
+  cancelAnimationFrame(bell._fadeRAF); clearInterval(bell._fadeTICK);
   if(muted){
-    cancelAnimationFrame(bgm._fadeRAF);
-    cancelAnimationFrame(bell._fadeRAF);
     bgm._targetVol = 0; bgm.volume = 0;
     bell._targetVol = 0; bell.volume = 0;
   }else{
-    bgm._targetVol = .85;
-    bell._targetVol = .9;
-    if(!bgm.paused) fadeEl(bgm, .85, 400);
-    if(!bell.paused) fadeEl(bell, .9, 400);
+    bgm._targetVol = BGM_VOL;
+    bell._targetVol = BELL_VOL;
+    if(!bgm.paused && bgmIntent === 'play') fadeEl(bgm, BGM_VOL, 400);
+    if(!bell.paused) fadeEl(bell, BELL_VOL, 400);
   }
 };
+
+/* 标签页重新可见时，把底乐状态拉回意图（浏览器可能暂停过它） */
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden) return;
+  if(bgmIntent === 'play' && bgm.paused && audioUnlocked){
+    startEl(bgm, BGM_VOL, 600);
+  }
+});
 
 /* =========================================================
    场景1：雨 + 茉莉（单 canvas 合并绘制）
@@ -1528,39 +1555,42 @@ const letterData = [
 function onEnter(i){
   switch(i){
     case 0:
-      // 静默，等点击（点击后才解锁音频）
+      // 黑场雨 —— 底乐从这一刻就开始（用户点"进入"时已解锁），
+      // 让它安静地铺在雨声下面，不做任何暂停。
+      bgmPlay(1800);
       break;
 
     case 1:
-      // 茉莉雨 —— 播《特别的人》
-      playBgm(TEBIE, {fadeIn:2600, start:22, vol:.85});
+      // 茉莉雨 —— 底乐继续（本来就在放，不重置、不跳进度）
+      bgmPlay(1800);
       if(!jr) jr = jasmineRain('cv1');
       requestAnimationFrame(()=> requestAnimationFrame(()=> jr.start()));
       setTimeout(()=> jr.resize(), 400);
       break;
 
     case 2:
-      // 来电 —— 停《特别的人》，改放《好想爱这个世界啊》铃声
-      fadeOutBgm(1400);
-      playBell();
+      // 来电 —— 唯一停底乐的时刻之一，改放《好想爱这个世界啊》铃声
+      bgmPause(1200);
+      bellStart();
       runCallSequence();
       break;
 
     case 3:
-      // 色彩 —— 回到底乐《特别的人》
-      stopBell(900);
-      playBgm(TEBIE, {fadeIn:2200, start:40, vol:.82});
+      // 色彩 —— 铃声收起，底乐从暂停处接着播
+      bellStop(700);
+      bgmPlay(1800);
       break;
 
     case 4:
-      // 信 —— 《特别的人》继续（若已停则恢复）
-      ensureBgm();
+      // 信 —— 底乐继续
+      bgmPlay(1400);
       buildLetter();
       break;
 
     case 5:
-      // 蛋糕 —— 先停底乐，等吹灭后再从 0 循环放
-      fadeOutBgm(1200);
+      // 蛋糕 —— 进幕时底乐照常放着（许愿时也有音乐），
+      // 真正暂停的时刻是「吹蜡烛」——在 doBlow() 里处理。
+      bgmPlay(1600);
       startCake();
       break;
   }
@@ -1779,6 +1809,8 @@ function doBlow(){
   // 波纹归零
   [...$('ripples').children].forEach(el=>{ el.style.height='3px'; el.style.opacity='.15'; });
   $('breathFill').style.width = '100%';
+  // 这一刻暂停底乐 —— 蜡烛吹灭的瞬间要安静，让许愿被听见
+  bgmPause(900);
   // 祝福词
   setTimeout(()=> $('wish').classList.add('on'), 1300);
   // 祝福词占据主视觉 → 蛋糕淡出，避免叠加
@@ -1786,10 +1818,8 @@ function doBlow(){
     const cw = document.querySelector('.cake-wrap');
     if(cw) cw.classList.add('fadeout');
   }, 1500);
-  // 吹灭后：《特别的人》重新从 0 开始，循环播放
-  setTimeout(()=>{
-    playBgm(TEBIE, {fadeIn:2600, start:0, vol:.78});
-  }, 1500);
+  // 许愿结束、祝福词浮出后，底乐**从刚才暂停的地方接着播**（不回到开头）
+  setTimeout(()=>{ bgmPlay(2200); }, 2400);
 }
 
 /* ---------- 头像飘浮 ---------- */
@@ -1824,7 +1854,8 @@ $('againBtn').onclick = ()=>{
   // 蛋糕重新浮现
   const cw = document.querySelector('.cake-wrap');
   if(cw) cw.classList.remove('fadeout');
-  setTimeout(startCake, 700);
+  // 底乐确保在放（首次吹灭后已恢复，这里只做兜底，不重置进度）
+  setTimeout(()=>{ bgmPlay(1400); startCake(); }, 700);
 };
 
 /* 点火苗 / 点蜡烛 也能吹灭（兜底，防止麦克风不灵） */
